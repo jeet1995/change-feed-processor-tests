@@ -23,9 +23,9 @@ public class Main {
 
         JCommander jCommander = new JCommander(cfg, null, args);
 
-        ChangeFeedProcessorRunner changeFeedProcessorRunner = new ChangeFeedProcessorRunner();
+        ChangeFeedProcessManager changeFeedProcessManager = new ChangeFeedProcessManager();
 
-        Future<?> task = cfpExecutorService.submit(() -> changeFeedProcessorRunner.execute(cfg));
+        Future<?> task = cfpExecutorService.submit(() -> changeFeedProcessManager.execute(cfg));
 
         while (true) {
             if (task.isDone()) {

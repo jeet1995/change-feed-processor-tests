@@ -11,12 +11,10 @@ import com.azure.cosmos.models.CosmosContainerProperties;
 import com.azure.cosmos.models.ThroughputProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,9 +23,9 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class ChangeFeedProcessorRunner {
+public class ChangeFeedProcessManager {
 
-    private static final Logger logger = LoggerFactory.getLogger(ChangeFeedProcessorRunner.class);
+    private static final Logger logger = LoggerFactory.getLogger(ChangeFeedProcessManager.class);
 
     private static final ExecutorService bulkIngestionExecutorService = new ScheduledThreadPoolExecutor(1);
 
@@ -35,62 +33,108 @@ public class ChangeFeedProcessorRunner {
 
         int docCountToRead = cfg.getDocCountToIngestBeforeSplit() + cfg.getDocCountToIngestAfterSplit();
         Set<String> idsFetched = ConcurrentHashMap.newKeySet();
+
         AtomicReference<Instant> cfpStartTime = new AtomicReference<>();
         AtomicReference<Instant> cfpEndTime = new AtomicReference<>();
-        AtomicBoolean isProcessingComplete = new AtomicBoolean(false);
+
+        // todo (abhmohanty): replace with value holder
+        AtomicReference<String> databaseResourceId = new AtomicReference<>();
+        AtomicReference<String> feedCollectionResourceId = new AtomicReference<>();
+        AtomicReference<String> leaseCollectionResourceId = new AtomicReference<>();
+
+        AtomicBoolean isInitialProcessingComplete = new AtomicBoolean(false);
 
         String databaseId = cfg.getDatabaseId();
+        String serviceEndpoint = cfg.getServiceEndpoint();
         String feedContainerId = UUID.randomUUID() + "-" + "feed";
         String leaseContainerId = UUID.randomUUID() + "-" + "lease";
+        String owner = "HOST_0";
+        String leasePrefix = "TEST";
+        int maxItemCount = 1000;
 
         CosmosAsyncDatabase ffcfDatabase = null;
         CosmosAsyncContainer feedContainer = null, leaseContainer = null;
-        final AtomicReference<BulkIngestionAndSplitRunner> bulkIngestionAndSplitRunner = new AtomicReference<>();
+        final AtomicReference<BatchRunner> bulkIngestionAndSplitRunner = new AtomicReference<>();
 
         try (CosmosAsyncClient asyncClient = buildCosmosAsyncClient(cfg)) {
 
-            ffcfDatabase = createDatabaseIfNotExists(asyncClient, databaseId);
+            ffcfDatabase = createDatabaseIfNotExists(asyncClient, databaseResourceId, databaseId);
 
             logger.info("Building feed container and lease container...");
 
-            feedContainer = createContainerIfNotExists(ffcfDatabase, feedContainerId, cfg.getFeedContainerInitialThroughput(), "/mypk");
-            leaseContainer = createContainerIfNotExists(ffcfDatabase, leaseContainerId, 400, "/id");
+            feedContainer = createContainerIfNotExists(ffcfDatabase, feedCollectionResourceId, feedContainerId, cfg.getFeedContainerInitialThroughput(), "/mypk");
+            leaseContainer = createContainerIfNotExists(ffcfDatabase, leaseCollectionResourceId, leaseContainerId, 400, "/id");
 
-            List<ChangeFeedProcessor> changeFeedProcessors = new ArrayList<>();
+            final LeaseManager leaseManager = new LeaseManager(
+                leaseContainer,
+                leasePrefix,
+                cfg.getServiceEndpoint(),
+                feedCollectionResourceId.get(),
+                databaseResourceId.get());
 
-            for (int i = 0; i < 1; i++) {
-                ChangeFeedProcessor changeFeedProcessor = buildChangeFeedProcessor(
-                    "HOST" + "_" + i,
-                    feedContainer,
-                    leaseContainer,
-                    cfpStartTime,
-                    cfpEndTime,
-                    idsFetched,
-                    isProcessingComplete,
-                    docCountToRead);
+            ChangeFeedProcessor changeFeedProcessor = buildChangeFeedProcessor(
+                owner,
+                feedContainer,
+                leaseContainer,
+                leaseManager,
+                leasePrefix,
+                cfpStartTime,
+                cfpEndTime,
+                idsFetched,
+                isInitialProcessingComplete,
+                docCountToRead,
+                maxItemCount);
 
-                changeFeedProcessors.add(changeFeedProcessor);
-            }
 
-            bulkIngestionAndSplitRunner.set(new BulkIngestionAndSplitRunner());
+            bulkIngestionAndSplitRunner.set(new BatchRunner());
 
-            Flux
-                .fromIterable(changeFeedProcessors)
-                .flatMap(changeFeedProcessor -> changeFeedProcessor.start())
-                .collectList()
-                .doOnSuccess(unused -> bulkIngestionExecutorService.submit(() -> bulkIngestionAndSplitRunner.get().execute(cfg, feedContainerId)))
+            Mono
+                .just(changeFeedProcessor)
+                .flatMap(ChangeFeedProcessor::start)
+                .doOnSuccess(unused -> {
+                        bulkIngestionExecutorService.submit(
+                            () -> bulkIngestionAndSplitRunner.get().execute(cfg, feedContainerId));
+                        leaseManager.takeLeaseSnapshot();
+                    }
+                )
                 .block();
 
-            while (!isProcessingComplete.get()) {
+            // todo (abhmohanty): replace with latch / barrier wait
+            while (!isInitialProcessingComplete.get()) {
                 // do nothing
             }
 
-            Flux
-                .fromIterable(changeFeedProcessors)
-                .flatMap(changeFeedProcessor -> changeFeedProcessor.stop())
-                .collectList()
-                .doOnSuccess(unused -> bulkIngestionExecutorService.shutdown())
+            logger.info("Initial change feed processing complete.");
+            changeFeedProcessor
+                .stop()
+                .doOnSuccess(unused -> logger.info("CFP stopped temporarily!"))
                 .block();
+
+            Thread.sleep(10_000);
+
+            if (cfg.shouldResetLeaseContainer() && isInitialProcessingComplete.get()) {
+                logger.info("Attempting to reset lease container...");
+                idsFetched.clear();
+                isInitialProcessingComplete.set(false);
+                leaseManager.resetLeaseContainerToFullRangeLease();
+                changeFeedProcessor
+                    .start()
+                    .doOnSuccess(unused -> logger.info("CFP started!"))
+                    .block();
+                Thread.sleep(30_000);
+            }
+
+            while (!isInitialProcessingComplete.get()) {
+                // do nothing
+            }
+
+            if (isInitialProcessingComplete.get()) {
+                Mono
+                    .just(changeFeedProcessor)
+                    .flatMap(ChangeFeedProcessor::stop)
+                    .doOnSuccess(unused -> bulkIngestionExecutorService.shutdown())
+                    .block();
+            }
 
             Thread.sleep(30_000);
 
@@ -138,11 +182,14 @@ public class ChangeFeedProcessorRunner {
         String hostName,
         CosmosAsyncContainer feedContainer,
         CosmosAsyncContainer leaseContainer,
+        LeaseManager leaseManager,
+        String leasePrefix,
         final AtomicReference<Instant> startTime,
         final AtomicReference<Instant> endTime,
         final Set<String> idsFetched,
         final AtomicBoolean isProcessingComplete,
-        final int idCountsToFetch) {
+        final int idCountsToFetch,
+        final int maxItemCount) {
 
         return new ChangeFeedProcessorBuilder()
             .hostName(hostName)
@@ -150,8 +197,16 @@ public class ChangeFeedProcessorRunner {
             .leaseContainer(leaseContainer)
             .handleAllVersionsAndDeletesChanges((docs, context) -> {
 
+                if (isProcessingComplete.get()) {
+                    return;
+                }
+
                 if (idsFetched.isEmpty()) {
                     startTime.set(Instant.now());
+                }
+
+                if (idsFetched.size() >= maxItemCount && idsFetched.size() <= 2 * maxItemCount) {
+                    leaseManager.takeLeaseSnapshot();
                 }
 
                 for (com.azure.cosmos.models.ChangeFeedProcessorItem doc : docs) {
@@ -161,29 +216,45 @@ public class ChangeFeedProcessorRunner {
                 logger.info("Ids fetched : {}", idsFetched.size());
 
                 if (idsFetched.size() >= idCountsToFetch) {
-                    isProcessingComplete.set(true);
                     endTime.set(Instant.now());
+                    isProcessingComplete.set(true);
                 }
 
                 logger.info("Lease token : {}", context.getLeaseToken());
             })
             .options(new ChangeFeedProcessorOptions()
-                .setLeasePrefix("TEST")
+                .setLeasePrefix(leasePrefix)
                 .setStartFromBeginning(false)
-                .setMaxItemCount(10_000)
+                .setMaxItemCount(maxItemCount)
             )
             .buildChangeFeedProcessor();
     }
 
-    private static CosmosAsyncDatabase createDatabaseIfNotExists(CosmosAsyncClient asyncClient, String databaseId) {
-        asyncClient.createDatabaseIfNotExists(databaseId).block();
+    private static CosmosAsyncDatabase createDatabaseIfNotExists(
+        CosmosAsyncClient asyncClient,
+        AtomicReference<String> databaseResourceId,
+        String databaseId) {
+
+        asyncClient
+            .createDatabaseIfNotExists(databaseId)
+            .doOnSuccess(cosmosDatabaseResponse -> databaseResourceId.set(cosmosDatabaseResponse.getProperties().getResourceId()))
+            .block();
 
         return asyncClient.getDatabase(databaseId);
     }
 
-    private static CosmosAsyncContainer createContainerIfNotExists(CosmosAsyncDatabase asyncDatabase, String containerId, int throughput, String pkPath) {
+    private static CosmosAsyncContainer createContainerIfNotExists(
+        CosmosAsyncDatabase asyncDatabase,
+        AtomicReference<String> collectionResourceId,
+        String containerId,
+        int throughput,
+        String pkPath) {
+
         CosmosContainerProperties containerProperties = new CosmosContainerProperties(containerId, pkPath);
-        asyncDatabase.createContainerIfNotExists(containerProperties, ThroughputProperties.createManualThroughput(throughput)).block();
+        asyncDatabase
+            .createContainerIfNotExists(containerProperties, ThroughputProperties.createManualThroughput(throughput))
+            .doOnSuccess(cosmosContainerResponse -> collectionResourceId.set(cosmosContainerResponse.getProperties().getResourceId()))
+            .block();
 
         return asyncDatabase.getContainer(containerId);
     }
@@ -199,5 +270,9 @@ public class ChangeFeedProcessorRunner {
         logger.info("Split duration : {}", Duration.between(splitStartTime, splitEndTime).toMillis());
         logger.info("Bulk ingestion duration : {}", Duration.between(ingestionStartTime, splitStartTime).plus(Duration.between(splitEndTime, ingestionEndTime)).toMillis());
         logger.info("CFP ingestion duration : {}", Duration.between(cfpStartTime, cfpEndTime).minus(Duration.between(splitStartTime, splitEndTime)).toMillis());
+    }
+
+    private static void isProcessingComplete() {
+
     }
 }

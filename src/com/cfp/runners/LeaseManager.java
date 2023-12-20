@@ -1,0 +1,192 @@
+package com.cfp.runners;
+
+import com.azure.cosmos.CosmosAsyncContainer;
+import com.azure.cosmos.implementation.HttpConstants;
+import com.azure.cosmos.implementation.apachecommons.lang.StringUtils;
+import com.azure.cosmos.implementation.changefeed.Lease;
+import com.azure.cosmos.implementation.changefeed.common.LeaseVersion;
+import com.azure.cosmos.implementation.changefeed.epkversion.ServiceItemLeaseV1;
+import com.azure.cosmos.implementation.feedranges.FeedRangeEpkImpl;
+import com.azure.cosmos.models.PartitionKey;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
+public class LeaseManager {
+
+    private static final Logger logger = LoggerFactory.getLogger(LeaseManager.class);
+    private static final FeedRangeEpkImpl fullFeedRange = FeedRangeEpkImpl.forFullRange();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final AtomicReference<List<JsonNode>> lastLeasesSnapshot = new AtomicReference<>();
+    private final String fullRangeLeaseId;
+    private final CosmosAsyncContainer leaseContainer;
+
+    public LeaseManager(CosmosAsyncContainer leaseContainer,
+                        String leasePrefix,
+                        String serviceEndpoint,
+                        String feedCollectionResourceId,
+                        String databaseResourceId) throws URISyntaxException {
+        this.leaseContainer = leaseContainer;
+        this.fullRangeLeaseId = constructLeaseId(leasePrefix, serviceEndpoint, feedCollectionResourceId,
+            databaseResourceId, fullFeedRange.getRange().getMin(), fullFeedRange.getRange().getMax());
+    }
+
+    public synchronized void resetLeaseContainerToLastRecordedLeaseSnapshot() {
+
+        String leaseQuery = "select * from c where not contains(c.id, \"info\")";
+
+        List<JsonNode> leaseDocuments = leaseContainer
+            .queryItems(leaseQuery, JsonNode.class)
+            .collectList()
+            .block();
+
+        if (leaseDocuments == null || leaseDocuments.isEmpty()) {
+            logger.warn("No lease documents found");
+            return;
+        }
+
+        // delete leases in the lease container
+        for (JsonNode leaseDocument : leaseDocuments) {
+
+            String leaseId = leaseDocument.get("id").asText();
+
+            leaseContainer
+                .deleteItem(leaseId, new PartitionKey(leaseId))
+                .doOnSuccess(response -> logger.info("Lease with id : {} has been deleted successfully.", leaseId))
+                .block();
+        }
+
+        List<JsonNode> lastRecordedLeases = new ArrayList<>(lastLeasesSnapshot.get());
+
+        // restore leases from the snapshot
+        for (JsonNode lastRecordedLease : lastRecordedLeases) {
+            leaseContainer
+                .createItem(lastRecordedLease)
+                .doOnSuccess(response -> {
+                    if (response.getStatusCode() == HttpConstants.StatusCodes.CREATED) {
+                        logger.info(
+                            "Lease item with id : {} successfully created manually.",
+                            response.getItem().get("id").asText());
+                    }
+                })
+                .block();
+        }
+    }
+
+    public synchronized void resetLeaseContainerToFullRangeLease() throws JsonProcessingException {
+
+        String leaseQuery = "select * from c where not contains(c.id, \"info\")";
+
+        List<JsonNode> leaseDocuments = leaseContainer
+            .queryItems(leaseQuery, JsonNode.class)
+            .collectList()
+            .block();
+
+        if (leaseDocuments == null || leaseDocuments.isEmpty()) {
+            logger.warn("No lease documents found");
+            return;
+        }
+
+        // delete leases in the lease container
+        for (JsonNode leaseDocument : leaseDocuments) {
+
+            String leaseId = leaseDocument.get("id").asText();
+
+            leaseContainer
+                .deleteItem(leaseId, new PartitionKey(leaseId))
+                .doOnSuccess(response -> logger.info("Lease with id : {} has been deleted successfully.", leaseId))
+                .block();
+        }
+
+        List<JsonNode> lastRecordedLeases = new ArrayList<>(lastLeasesSnapshot.get());
+
+        for (JsonNode lastRecordedLease : lastRecordedLeases) {
+
+            String continuation = lastRecordedLease.get("ContinuationToken").asText();
+            String readableContinuation = new String(Base64.getDecoder().decode(continuation), StandardCharsets.UTF_8);
+            String continuationWithZeroLsn = modifyContinuationWithZeroLsn(readableContinuation);
+            String encodedContinuationWithZeroLsn =
+                Base64.getEncoder().encodeToString(continuationWithZeroLsn.getBytes(StandardCharsets.UTF_8));
+
+            ((ObjectNode) lastRecordedLease).put("ContinuationToken", encodedContinuationWithZeroLsn);
+
+            leaseContainer
+                .createItem(lastRecordedLease)
+                .doOnSuccess(response -> {
+                    if (response.getStatusCode() == HttpConstants.StatusCodes.CREATED) {
+                        logger.info(
+                            "Lease item with id : {} successfully created manually.",
+                            response.getItem().get("id").asText());
+                    }
+                })
+                .block();
+        }
+    }
+
+    public synchronized void takeLeaseSnapshot() {
+        String leaseQuery = "select * from c where not contains(c.id, \"info\")";
+
+        List<JsonNode> leaseDocuments = leaseContainer
+            .queryItems(leaseQuery, JsonNode.class)
+            .collectList()
+            .block();
+
+        if (leaseDocuments == null || leaseDocuments.isEmpty()) {
+            logger.warn("No lease documents found");
+            return;
+        }
+
+        this.lastLeasesSnapshot.set(leaseDocuments);
+    }
+
+    private static String constructLeaseId(
+        String leasePrefix,
+        String serviceEndpoint,
+        String feedCollectionResourceId,
+        String databaseResourceId,
+        String feedRangeMin,
+        String feedRangeMax) throws URISyntaxException {
+
+        return String.format(
+            "%s%s_%s_%s..%s-%s",
+            leasePrefix,
+            new URI(serviceEndpoint).getHost(),
+            databaseResourceId,
+            feedCollectionResourceId,
+            feedRangeMin,
+            feedRangeMax);
+    }
+
+    private static String modifyContinuationWithZeroLsn(String readableContinuation) throws JsonProcessingException {
+        JsonNode continuationAsObjectNode = OBJECT_MAPPER.readTree(readableContinuation);
+        JsonNode continuationInnerAsObjectNode = continuationAsObjectNode.get("Continuation");
+
+        if (continuationAsObjectNode.isEmpty()) {
+            logger.error("Modification of continuation not possible as continuation is null or empty.");
+            return StringUtils.EMPTY;
+        }
+
+        Iterator<JsonNode> continuationNodeElements = continuationInnerAsObjectNode.get("Continuation").elements();
+
+        if (continuationNodeElements.hasNext()) {
+            JsonNode continuationNodeElement = continuationNodeElements.next();
+            ((ObjectNode) continuationNodeElement).put("token", "\"0\"");
+            String result = continuationAsObjectNode.toString();
+            return result;
+        }
+
+        return StringUtils.EMPTY;
+    }
+}

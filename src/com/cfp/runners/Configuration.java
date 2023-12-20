@@ -28,6 +28,9 @@ public class Configuration {
     @Parameter(names = "-shouldFeedContainerSplit", description = "Flag indicating whether feed container should split", arity = 1)
     private boolean shouldFeedContainerSplit;
 
+    @Parameter(names = "-shouldResetLeaseContainer", description = "Flag indicating whether lease container should be reset or not", arity = 1)
+    private boolean shouldResetLeaseContainer;
+
     @Parameter(names = "-docCountToIngestBeforeSplit", description = "Count of documents to ingest before the split")
     private int docCountToIngestBeforeSplit;
 
@@ -58,6 +61,10 @@ public class Configuration {
 
     public boolean shouldFeedContainerSplit() {
         return shouldFeedContainerSplit;
+    }
+
+    public boolean shouldResetLeaseContainer() {
+        return shouldResetLeaseContainer;
     }
 
     public int getDocCountToIngestBeforeSplit() {

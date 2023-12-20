@@ -20,7 +20,7 @@
           <archive>
             <manifest>
               <addClasspath>true</addClasspath>
-              <mainClass>com.cfp.runners.ChangeFeedProcessorRunner</mainClass>
+              <mainClass>com.cfp.runners.ChangeFeedProcessManager</mainClass>
             </manifest>
           </archive>
         </configuration>

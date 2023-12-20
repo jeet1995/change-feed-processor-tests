@@ -20,9 +20,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class BulkIngestionAndSplitRunner {
+public class BatchRunner {
 
-    private static final Logger logger = LoggerFactory.getLogger(BulkIngestionAndSplitRunner.class);
+    private static final Logger logger = LoggerFactory.getLogger(BatchRunner.class);
 
     private final AtomicReference<Instant> splitStartTime = new AtomicReference<>();
     private final AtomicReference<Instant> splitEndTime = new AtomicReference<>();
@@ -32,11 +32,11 @@ public class BulkIngestionAndSplitRunner {
     public void execute(Configuration cfg, String feedContainerId) {
         logger.info("Bulk ingestor started...");
 
-        CosmosAsyncContainer ffcfFeedContainerForInternalObjects = null;
+        CosmosAsyncContainer feedContainer = null;
 
         try (CosmosAsyncClient asyncClient = buildCosmosAsyncClient()) {
 
-            ffcfFeedContainerForInternalObjects = getCosmosAsyncContainer(
+            feedContainer = getCosmosAsyncContainer(
                 asyncClient, cfg.getDatabaseId(), feedContainerId);
 
             logger.info("Ingest first batch of {} documents", cfg.getDocCountToIngestBeforeSplit());
@@ -47,20 +47,20 @@ public class BulkIngestionAndSplitRunner {
             splitStartTime.set(Instant.now());
             splitEndTime.set(Instant.now());
 
-            ingestDocuments(ffcfFeedContainerForInternalObjects, cfg.getDocCountToIngestBeforeSplit(), this.ingestionEndTime);
+            ingestDocuments(feedContainer, cfg.getDocCountToIngestBeforeSplit(), this.ingestionEndTime);
 
             if (cfg.shouldFeedContainerSplit()) {
 
                 splitStartTime.set(Instant.now());
                 logger.info("Split started!");
 
-                ThroughputResponse throughputResponse = ffcfFeedContainerForInternalObjects.replaceThroughput(
+                ThroughputResponse throughputResponse = feedContainer.replaceThroughput(
                     ThroughputProperties.createManualThroughput(cfg.getFeedContainerNewProvisionedThroughput())).block();
 
                 while (true) {
                     assert throughputResponse != null;
 
-                    throughputResponse = ffcfFeedContainerForInternalObjects.readThroughput().block();
+                    throughputResponse = feedContainer.readThroughput().block();
 
                     if (!throughputResponse.isReplacePending()) {
                         logger.info("Split completed!");
@@ -71,7 +71,7 @@ public class BulkIngestionAndSplitRunner {
             }
 
             logger.info("Ingest second batch of {} documents", cfg.getDocCountToIngestAfterSplit());
-            ingestDocuments(ffcfFeedContainerForInternalObjects, cfg.getDocCountToIngestAfterSplit(), this.ingestionEndTime);
+            ingestDocuments(feedContainer, cfg.getDocCountToIngestAfterSplit(), this.ingestionEndTime);
 
         } catch (Exception ex) {
             logger.error("Exception caught : {}", ex.toString());
