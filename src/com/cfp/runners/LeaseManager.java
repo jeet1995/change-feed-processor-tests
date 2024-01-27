@@ -135,7 +135,7 @@ public class LeaseManager {
         }
     }
 
-    public synchronized void takeLeaseSnapshot() {
+    public synchronized boolean takeLeaseSnapshot() {
         String leaseQuery = "select * from c where not contains(c.id, \"info\")";
 
         List<JsonNode> leaseDocuments = leaseContainer
@@ -145,10 +145,24 @@ public class LeaseManager {
 
         if (leaseDocuments == null || leaseDocuments.isEmpty()) {
             logger.warn("No lease documents found");
-            return;
+            return false;
+        }
+
+        if (leaseDocuments.size() > 1) {
+            logger.warn("Lease snapshot is only taken when feed container has a single physical partition...");
+            return false;
+        }
+
+        JsonNode leaseDocument = leaseDocuments.get(0);
+        String continuation = leaseDocument.get("ContinuationToken").asText();
+
+        if (continuation.equals("null")) {
+            logger.warn("Snapshotting of lease didn't go through since its continuation is 'null'...");
+            return false;
         }
 
         this.lastLeasesSnapshot.set(leaseDocuments);
+        return true;
     }
 
     private static String constructLeaseId(

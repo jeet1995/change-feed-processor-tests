@@ -4,6 +4,7 @@ import com.azure.cosmos.CosmosAsyncClient;
 import com.azure.cosmos.CosmosAsyncContainer;
 import com.azure.cosmos.CosmosClientBuilder;
 import com.azure.cosmos.implementation.TestConfigurations;
+import com.azure.cosmos.models.CosmosBulkExecutionOptions;
 import com.azure.cosmos.models.CosmosBulkOperations;
 import com.azure.cosmos.models.CosmosItemOperation;
 import com.azure.cosmos.models.PartitionKey;
@@ -34,7 +35,7 @@ public class BatchRunner {
 
         CosmosAsyncContainer feedContainer = null;
 
-        try (CosmosAsyncClient asyncClient = buildCosmosAsyncClient()) {
+        try (CosmosAsyncClient asyncClient = buildCosmosAsyncClient(cfg)) {
 
             feedContainer = getCosmosAsyncContainer(
                 asyncClient, cfg.getDatabaseId(), feedContainerId);
@@ -47,7 +48,7 @@ public class BatchRunner {
             splitStartTime.set(Instant.now());
             splitEndTime.set(Instant.now());
 
-            ingestDocuments(feedContainer, cfg.getDocCountToIngestBeforeSplit(), this.ingestionEndTime);
+            ingestDocuments(feedContainer, cfg.getDocCountToIngestBeforeSplit(), this.ingestionEndTime, cfg);
 
             if (cfg.shouldFeedContainerSplit()) {
 
@@ -71,18 +72,18 @@ public class BatchRunner {
             }
 
             logger.info("Ingest second batch of {} documents", cfg.getDocCountToIngestAfterSplit());
-            ingestDocuments(feedContainer, cfg.getDocCountToIngestAfterSplit(), this.ingestionEndTime);
+            ingestDocuments(feedContainer, cfg.getDocCountToIngestAfterSplit(), this.ingestionEndTime, cfg);
 
         } catch (Exception ex) {
             logger.error("Exception caught : {}", ex.toString());
         }
     }
 
-    private static CosmosAsyncClient buildCosmosAsyncClient() {
+    private static CosmosAsyncClient buildCosmosAsyncClient(Configuration cfg) {
 
         CosmosAsyncClient client = new CosmosClientBuilder()
-            .endpoint(TestConfigurations.HOST)
-            .key(TestConfigurations.MASTER_KEY)
+            .endpoint(cfg.getServiceEndpoint())
+            .key(cfg.getMasterKey())
             .contentResponseOnWriteEnabled(true)
             .buildAsyncClient();
 
@@ -93,9 +94,12 @@ public class BatchRunner {
         return client.getDatabase(databaseId).getContainer(containerId);
     }
 
-    private static void ingestDocuments(CosmosAsyncContainer asyncContainer, int docCount, AtomicReference<Instant> ingestionEndTime) {
+    private static void ingestDocuments(CosmosAsyncContainer asyncContainer, int docCount, AtomicReference<Instant> ingestionEndTime, Configuration cfg) {
 
         List<InternalObject> objectsToUpsert = new ArrayList<>();
+        CosmosBulkExecutionOptions bulkExecutionOptions = new CosmosBulkExecutionOptions();
+
+        bulkExecutionOptions.setInitialMicroBatchSize(cfg.getBulkIngestionMicroBatchSize());
 
         for (int i = 1; i <= docCount; i++) {
 
@@ -116,7 +120,7 @@ public class BatchRunner {
             .map(internalObject -> CosmosBulkOperations.getUpsertItemOperation(internalObject, new PartitionKey(internalObject.getMypk())));
 
         asyncContainer
-            .executeBulkOperations(cosmosItemOperations)
+            .executeBulkOperations(cosmosItemOperations, bulkExecutionOptions)
             .flatMap(bulkOperationResponse -> {
                 //                logger.info("Response : {}", bulkOperationResponse.getResponse().getStatusCode());
                 return Mono.just(bulkOperationResponse);

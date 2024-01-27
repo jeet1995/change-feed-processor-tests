@@ -11,6 +11,7 @@ public class Configuration {
     private static final int DEFAULT_DOC_SIZE_IN_KB = 1;
     private static final boolean DEFAULT_SHOULD_FEED_CONTAINER_SPLIT = false;
     private static final int DEFAULT_FEED_CONTAINER_NEW_PROVISIONED_THROUGHPUT = 12_000;
+    private static final int DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE = 100;
 
 
     @Parameter(names = "-serviceEndpoint", description = "Service Endpoint")
@@ -24,6 +25,20 @@ public class Configuration {
 
     @Parameter(names = "-databaseId", description = "Database id")
     private String databaseId;
+
+    public String getFeedContainerId() {
+        return feedContainerId;
+    }
+
+    public String getLeaseContainerId() {
+        return leaseContainerId;
+    }
+
+    @Parameter(names = "-feedContainerId", description = "Feed container id")
+    private String feedContainerId;
+
+    @Parameter(names = "-leaseContainerId", description = "Lease container id")
+    private String leaseContainerId;
 
     @Parameter(names = "-shouldFeedContainerSplit", description = "Flag indicating whether feed container should split", arity = 1)
     private boolean shouldFeedContainerSplit;
@@ -42,6 +57,9 @@ public class Configuration {
 
     @Parameter(names = "-approximateDocSizeInBytes", description = "Approximate document size in bytes")
     private int approximateDocSizeInKB;
+
+    @Parameter(names = "-bulkIngestionMicroBatchSize", description = "Bulk ingestion micro-batch size")
+    private int bulkIngestionMicroBatchSize;
 
     public String getServiceEndpoint() {
         return serviceEndpoint;
@@ -79,13 +97,20 @@ public class Configuration {
         return feedContainerNewProvisionedThroughput;
     }
 
+    public int getBulkIngestionMicroBatchSize() {
+        return bulkIngestionMicroBatchSize;
+    }
+
     public void populateWithDefaults() {
         this.serviceEndpoint = StringUtils.defaultString(this.serviceEndpoint, TestConfigurations.HOST);
         this.masterKey = StringUtils.defaultString(this.masterKey, TestConfigurations.MASTER_KEY);
         this.feedContainerInitialThroughput = DEFAULT_FEED_CONTAINER_INITIAL_THROUGHPUT;
+        this.feedContainerId = StringUtils.defaultString(this.feedContainerId, "");
+        this.leaseContainerId = StringUtils.defaultString(this.leaseContainerId, "");
         this.databaseId = StringUtils.defaultString(this.databaseId, DEFAULT_DATABASE_ID);
         this.shouldFeedContainerSplit = DEFAULT_SHOULD_FEED_CONTAINER_SPLIT;
         this.feedContainerNewProvisionedThroughput = DEFAULT_FEED_CONTAINER_NEW_PROVISIONED_THROUGHPUT;
         this.approximateDocSizeInKB = DEFAULT_DOC_SIZE_IN_KB;
+        this.bulkIngestionMicroBatchSize = DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE;
     }
 }
