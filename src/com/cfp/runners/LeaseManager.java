@@ -3,9 +3,6 @@ package com.cfp.runners;
 import com.azure.cosmos.CosmosAsyncContainer;
 import com.azure.cosmos.implementation.HttpConstants;
 import com.azure.cosmos.implementation.apachecommons.lang.StringUtils;
-import com.azure.cosmos.implementation.changefeed.Lease;
-import com.azure.cosmos.implementation.changefeed.common.LeaseVersion;
-import com.azure.cosmos.implementation.changefeed.epkversion.ServiceItemLeaseV1;
 import com.azure.cosmos.implementation.feedranges.FeedRangeEpkImpl;
 import com.azure.cosmos.models.PartitionKey;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -114,13 +111,13 @@ public class LeaseManager {
 
         for (JsonNode lastRecordedLease : lastRecordedLeases) {
 
-            String continuation = lastRecordedLease.get("ContinuationToken").asText();
-            String readableContinuation = new String(Base64.getDecoder().decode(continuation), StandardCharsets.UTF_8);
-            String continuationWithZeroLsn = modifyContinuationWithZeroLsn(readableContinuation);
-            String encodedContinuationWithZeroLsn =
-                Base64.getEncoder().encodeToString(continuationWithZeroLsn.getBytes(StandardCharsets.UTF_8));
-
-            ((ObjectNode) lastRecordedLease).put("ContinuationToken", encodedContinuationWithZeroLsn);
+//            String continuation = lastRecordedLease.get("ContinuationToken").asText();
+//            String readableContinuation = new String(Base64.getDecoder().decode(continuation), StandardCharsets.UTF_8);
+//            String continuationWithZeroLsn = modifyContinuationWithZeroLsn(readableContinuation);
+//            String encodedContinuationWithZeroLsn =
+//                Base64.getEncoder().encodeToString(continuationWithZeroLsn.getBytes(StandardCharsets.UTF_8));
+//
+//            ((ObjectNode) lastRecordedLease).put("ContinuationToken", encodedContinuationWithZeroLsn);
 
             leaseContainer
                 .createItem(lastRecordedLease)
@@ -135,7 +132,7 @@ public class LeaseManager {
         }
     }
 
-    public synchronized boolean takeLeaseSnapshot() {
+    public synchronized boolean takeLeaseSnapshot(String feedContainerRid) {
         String leaseQuery = "select * from c where not contains(c.id, \"info\")";
 
         List<JsonNode> leaseDocuments = leaseContainer
@@ -154,12 +151,16 @@ public class LeaseManager {
         }
 
         JsonNode leaseDocument = leaseDocuments.get(0);
-        String continuation = leaseDocument.get("ContinuationToken").asText();
+        String continuationWithZeroLsn = decorateContinuationWithFeedCollectionRid(feedContainerRid, loadTemplateContinuationForFullFeedRange());
+        String encodedContinuationWithZeroLsn =
+                Base64.getEncoder().encodeToString(continuationWithZeroLsn.getBytes(StandardCharsets.UTF_8));
 
-        if (continuation.equals("null")) {
-            logger.warn("Snapshotting of lease didn't go through since its continuation is 'null'...");
-            return false;
-        }
+        ((ObjectNode) leaseDocument).put("ContinuationToken", encodedContinuationWithZeroLsn);
+
+//        if (continuation.equals("null")) {
+//            logger.warn("Snapshotting of lease didn't go through since its continuation is 'null'...");
+//            return false;
+//        }
 
         this.lastLeasesSnapshot.set(leaseDocuments);
         return true;
@@ -202,5 +203,51 @@ public class LeaseManager {
         }
 
         return StringUtils.EMPTY;
+    }
+
+    private static String decorateContinuationWithFeedCollectionRid(String feedCollectionRid, String changeFeedContinuation) {
+        JsonNode changeFeedJsonNode = null;
+        try {
+            changeFeedJsonNode = OBJECT_MAPPER.readTree(changeFeedContinuation);
+            ((ObjectNode) changeFeedJsonNode).put("Rid", feedCollectionRid);
+
+            JsonNode continuationAsJsonNode = changeFeedJsonNode.get("Continuation");
+            ((ObjectNode) continuationAsJsonNode).put("Rid", feedCollectionRid);
+
+            return OBJECT_MAPPER.writeValueAsString(changeFeedJsonNode);
+        } catch (JsonProcessingException e) {
+            logger.error("Continuation - \n {} \n could not be de-serialized as JsonNode!", changeFeedContinuation);
+            return null;
+        }
+    }
+
+    private static String loadTemplateContinuationForFullFeedRange() {
+        return "{\n" +
+                "    \"V\": 1,\n" +
+                "    \"Rid\": \"\",\n" +
+                "    \"Mode\": \"FULL_FIDELITY\",\n" +
+                "    \"StartFrom\": {\n" +
+                "        \"Type\": \"NOW\"\n" +
+                "    },\n" +
+                "    \"Continuation\": {\n" +
+                "        \"V\": 1,\n" +
+                "        \"Rid\": \"\",\n" +
+                "        \"Continuation\": [\n" +
+                "            {\n" +
+                "                \"token\": \"\\\"0\\\"\",\n" +
+                "                \"range\": {\n" +
+                "                    \"min\": \"\",\n" +
+                "                    \"max\": \"FF\"\n" +
+                "                }\n" +
+                "            }\n" +
+                "        ],\n" +
+                "        \"Range\": {\n" +
+                "            \"min\": \"\",\n" +
+                "            \"max\": \"FF\",\n" +
+                "            \"isMinInclusive\": true,\n" +
+                "            \"isMaxInclusive\": false\n" +
+                "        }\n" +
+                "    }\n" +
+                "}";
     }
 }

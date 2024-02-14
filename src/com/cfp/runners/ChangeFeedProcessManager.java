@@ -18,7 +18,6 @@ import com.cfp.runners.entity.RequestResponseEntity;
 import com.cfp.runners.entity.TonedDownFeedResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -28,7 +27,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -106,7 +104,7 @@ public class ChangeFeedProcessManager {
                 .doOnSuccess(unused -> {
                         bulkIngestionExecutorService.submit(
                             () -> bulkIngestionAndSplitRunner.get().execute(cfg, feedContainerId));
-                        leaseManager.takeLeaseSnapshot();
+                        leaseManager.takeLeaseSnapshot(String.format("/dbs/%s/colls/%s", databaseId, feedContainerId));
                     }
                 )
                 .block();
@@ -116,13 +114,16 @@ public class ChangeFeedProcessManager {
                 // do nothing
             }
 
+            // allow enough time to checkpoint
+            Thread.sleep(30_000);
+
             logger.info("Initial change feed processing complete.");
             changeFeedProcessor
                 .stop()
                 .doOnSuccess(unused -> logger.info("CFP stopped temporarily!"))
                 .block();
 
-            Thread.sleep(10_000);
+            Thread.sleep(30_000);
 
             if (cfg.shouldResetLeaseContainer() && isInitialProcessingComplete.get()) {
                 logger.info("Attempting to reset lease container...");
@@ -138,7 +139,7 @@ public class ChangeFeedProcessManager {
 
                     })
                     .block();
-                Thread.sleep(30_000);
+//                Thread.sleep(30_000);
             }
 
             while (!isInitialProcessingComplete.get() && !isJobHangDetected(changeFeedExecutionContextSupplier.get().getLastProcessedCfpBatchInstant().get())) {
@@ -221,18 +222,11 @@ public class ChangeFeedProcessManager {
                     startTime.set(Instant.now());
                 }
 
-                AtomicBoolean isFirstChangeFeedBatch = changeFeedExecutionContext.getIsFirstChangeFeedBatch();
+                AtomicBoolean isLeaseSnapshotTaken = changeFeedExecutionContext.getIsLeaseSnapshotTaken();
                 AtomicBoolean isChangeFeedReprocessing = changeFeedExecutionContext.getIsChangeFeedReprocessing();
 
                 AtomicInteger batchCount = changeFeedExecutionContext.getBatchCount();
-
-                if (batchCount.incrementAndGet() == 1 && !isChangeFeedReprocessing.get()) {
-                    boolean isSuccessfulSnapshot = leaseManager.takeLeaseSnapshot();
-
-                    if (isSuccessfulSnapshot) {
-                        isFirstChangeFeedBatch.set(false);
-                    }
-                }
+                batchCount.incrementAndGet();
 
                 for (com.azure.cosmos.models.ChangeFeedProcessorItem doc : docs) {
 
@@ -257,9 +251,9 @@ public class ChangeFeedProcessManager {
                 addRequestResponseEntityToList(context, docIdsProcessedInChangeFeedBatch, changeFeedExecutionContext.getRequestResponseEntities(), isChangeFeedReprocessing);
             })
             .options(new ChangeFeedProcessorOptions()
-                .setLeasePrefix(leasePrefix)
+                // .setLeasePrefix(leasePrefix)
                 .setStartFromBeginning(false)
-                .setMaxItemCount(1)
+                .setMaxItemCount(50)
             )
             .buildChangeFeedProcessor();
     }
@@ -317,7 +311,7 @@ public class ChangeFeedProcessManager {
         RequestResponseEntity requestResponseEntity = new RequestResponseEntity();
 
         FeedResponse<ChangeFeedProcessorItem> feedResponse = context.getFeedResponse();
-        CosmosChangeFeedRequestOptions changeFeedRequestOptions = context.getCosmosChangeFeedRequestOptions();
+        String readableContinuationFromRequest = context.getReadableContinuationFromRequest();
         String leaseToken = context.getLeaseToken();
 
         TonedDownFeedResponse tonedDownFeedResponse = new TonedDownFeedResponse();
@@ -327,9 +321,9 @@ public class ChangeFeedProcessManager {
         requestResponseEntity.setLeaseToken(leaseToken);
         requestResponseEntity.setTonedDownFeedResponse(tonedDownFeedResponse);
         requestResponseEntity.setResponseHeaders(feedResponse.getResponseHeaders());
-        requestResponseEntity.setContinuationStateFromRequest(new String(Base64.getUrlDecoder().decode(ModelBridgeInternal.getChangeFeedContinuationState(changeFeedRequestOptions).toString())));
+        requestResponseEntity.setContinuationStateFromRequest(readableContinuationFromRequest);
         requestResponseEntity.setContinuationStateFromResponse(new String(Base64.getUrlDecoder().decode(feedResponse.getContinuationToken())));
-        requestResponseEntity.setDocIdsFromChangeFeedBatch(docIdsFromChangeFeedBatch);
+        // requestResponseEntity.setDocIdsFromChangeFeedBatch(docIdsFromChangeFeedBatch);
         requestResponseEntity.setChangeFeedBeingReprocessed(isReprocessing.get());
 
         requestResponseEntities.add(requestResponseEntity);

@@ -11,7 +11,7 @@ public class RequestResponseEntity {
     private String continuationStateFromRequest;
     private String continuationStateFromResponse;
     private Map<String, String> responseHeaders;
-    private List<String> docIdsFromChangeFeedBatch;
+//    private List<String> docIdsFromChangeFeedBatch;
     private String leaseToken;
     private TonedDownFeedResponse items;
     private boolean isChangeFeedBeingReprocessed;
@@ -30,9 +30,9 @@ public class RequestResponseEntity {
         this.responseHeaders = responseHeaders;
     }
 
-    public void setDocIdsFromChangeFeedBatch(List<String> docIdsFromChangeFeedBatch) {
-        this.docIdsFromChangeFeedBatch = docIdsFromChangeFeedBatch;
-    }
+//    public void setDocIdsFromChangeFeedBatch(List<String> docIdsFromChangeFeedBatch) {
+//        this.docIdsFromChangeFeedBatch = docIdsFromChangeFeedBatch;
+//    }
 
     public void setLeaseToken(String leaseToken) {
         this.leaseToken = leaseToken;
@@ -58,9 +58,9 @@ public class RequestResponseEntity {
         return responseHeaders;
     }
 
-    public List<String> getDocIdsFromChangeFeedBatch() {
-        return docIdsFromChangeFeedBatch;
-    }
+//    public List<String> getDocIdsFromChangeFeedBatch() {
+//        return docIdsFromChangeFeedBatch;
+//    }
 
     public String getLeaseToken() {
         return leaseToken;

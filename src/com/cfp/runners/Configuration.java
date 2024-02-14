@@ -11,7 +11,7 @@ public class Configuration {
     private static final int DEFAULT_DOC_SIZE_IN_KB = 1;
     private static final boolean DEFAULT_SHOULD_FEED_CONTAINER_SPLIT = false;
     private static final int DEFAULT_FEED_CONTAINER_NEW_PROVISIONED_THROUGHPUT = 12_000;
-    private static final int DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE = 100;
+    private static final int DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE = 50;
 
 
     @Parameter(names = "-serviceEndpoint", description = "Service Endpoint")

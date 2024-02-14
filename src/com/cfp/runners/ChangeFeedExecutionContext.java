@@ -16,7 +16,7 @@ public class ChangeFeedExecutionContext {
     private final Set<String> idsFetched;
     private final AtomicBoolean isProcessingComplete;
     private final int idCountsToFetch;
-    private final AtomicBoolean isFirstChangeFeedBatch;
+    private final AtomicBoolean isLeaseSnapshotTaken;
     private final AtomicBoolean isChangeFeedReprocessing;
     private final List<RequestResponseEntity> requestResponseEntities;
     private final AtomicReference<Instant> lastProcessedCfpBatchInstant;
@@ -31,7 +31,7 @@ public class ChangeFeedExecutionContext {
         this.idsFetched = ConcurrentHashMap.newKeySet();
         this.isProcessingComplete = new AtomicBoolean(false);
         this.idCountsToFetch = idCountsToFetch;
-        this.isFirstChangeFeedBatch = new AtomicBoolean(true);
+        this.isLeaseSnapshotTaken = new AtomicBoolean(false);
         this.isChangeFeedReprocessing = new AtomicBoolean(isChangeFeedReprocessing);
         this.requestResponseEntities = new ArrayList<>();
         this.lastProcessedCfpBatchInstant = new AtomicReference<>(Instant.now());
@@ -50,8 +50,8 @@ public class ChangeFeedExecutionContext {
         return idCountsToFetch;
     }
 
-    public AtomicBoolean getIsFirstChangeFeedBatch() {
-        return isFirstChangeFeedBatch;
+    public AtomicBoolean getIsLeaseSnapshotTaken() {
+        return isLeaseSnapshotTaken;
     }
 
     public AtomicBoolean getIsChangeFeedReprocessing() {
