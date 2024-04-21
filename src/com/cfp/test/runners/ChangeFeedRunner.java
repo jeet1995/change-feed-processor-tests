@@ -159,14 +159,16 @@ public class ChangeFeedRunner {
             logger.error("Exception occurred : {}", ex.toString());
         } finally {
 
-            if (feedContainer != null) {
-                logger.info("Deleting feed container.");
-                feedContainer.delete().block();
-            }
+            if (cfg.shouldCleanUpContainers()) {
+                if (feedContainer != null) {
+                    logger.info("Deleting feed container.");
+                    feedContainer.delete().block();
+                }
 
-            if (leaseContainer != null) {
-                logger.info("Deleting lease container.");
-                leaseContainer.delete().block();
+                if (leaseContainer != null) {
+                    logger.info("Deleting lease container.");
+                    leaseContainer.delete().block();
+                }
             }
         }
     }
