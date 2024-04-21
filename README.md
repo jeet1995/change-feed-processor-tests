@@ -25,24 +25,26 @@ mvn -e -Ppackage-assembly clean package
 
 3.1 Configurations possible
 
-| Configuration                           | Configuration Description                                                                           | Possible values         |
-|-----------------------------------------|-----------------------------------------------------------------------------------------------------|-------------------------|
-| `serviceEndpoint`                       | The Cosmos DB account URL.                                                                          | The relevant string     |
-| `masterKey`                             | The primary key used to authenticate with the Cosmos DB account                                     | The relevant string     |
-| `feedContainerInitialThroughput`        | Initial manual provisioned throughput of the feed container                                         | Any integer             |
-| `databaseId`                            | The name based ID of the database                                                                   | Some string             |
-| `feedContainerId`                       | The name based ID of the feed container.                                                            | Some string             |
-| `leaseContainerId`                      | The name based ID of the lease container.                                                           | Some string             |
-| `shouldFeedContainerSplit`              | Flag indicating whether feed container should split                                                 | `true` or `false`       |
-| `shouldResetLeaseContainer`             | Flag indicating whether lease container should be reset or not                                      | `true` or `false`       |
-| `docCountToIngestBeforeSplit`           | Count of documents to ingest before the split                                                       | Any integer             |
-| `docCountToIngestAfterSplit`            | Count of documents to ingest after the split                                                        | Any integer             |
-| `feedContainerNewProvisionedThroughput` | New manual provisioned throughput of the feed container to force splits of its physical partitions. | Any integer             |
-| `bulkIngestionMicroBatchSize`           | Bulk ingestion micro-batch size                                                                     | Any integer             |
-| `ingestionType`                         | Determines the way to ingest into the feed container - either through bulk of point creates.        | `Bulk` or `PointCreate` |
+| Configuration                           | Configuration Description                                                                                                          | Possible values         | Defaults                      |
+|-----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|-------------------------|-------------------------------|
+| `serviceEndpoint`                       | The Cosmos DB account URL.                                                                                                         | The relevant string     | Setting this is compulsory.   |
+| `masterKey`                             | The primary key used to authenticate with the Cosmos DB account                                                                    | The relevant string     | Setting this is compulsory.   |
+| `feedContainerInitialThroughput`        | Initial manual provisioned throughput of the feed container                                                                        | Any integer             | 6000                          |
+| `databaseId`                            | The name based ID of the database                                                                                                  | Some string             | `all-version-deletes-test-db` |
+| `feedContainerId`                       | The name based ID of the feed container.                                                                                           | Some string             | `feed-container`              |
+| `leaseContainerId`                      | The name based ID of the lease container.                                                                                          | Some string             | `lease-container`             |
+| `shouldFeedContainerSplit`              | Flag indicating whether feed container should split                                                                                | `true` or `false`       | `false`                       |
+| `shouldResetLeaseContainer`             | Flag indicating whether lease container should be reset or not                                                                     | `true` or `false`       | `false`                       |
+| `docCountToIngestBeforeSplit`           | Count of documents to ingest before the split                                                                                      | Any integer             | 6000                          |
+| `docCountToIngestAfterSplit`            | Count of documents to ingest after the split                                                                                       | Any integer             | 6000                          |
+| `feedContainerNewProvisionedThroughput` | New manual provisioned throughput of the feed container to force splits of its physical partitions.                                | Any integer             | 11000                         |
+| `bulkIngestionMicroBatchSize`           | Bulk ingestion micro-batch size                                                                                                    | Any integer             | 50                            |
+| `ingestionType`                         | Determines the way to ingest into the feed container - either through bulk of point creates.                                       | `Bulk` or `PointCreate` | `Bulk`                        |
+| `changeFeedMaxItemCount`                | Determines the max item count per change feed enumeration - could go beyond the specified value depending on ingestion batch size. | Any integer.            | 10                            |
+| `shouldCleanUpContainers`               | Flag to indicate whether feed and lease containers should be deleted after the run.                                                | `true` or `false`       | `true`                        |
 
 3.2 Running the `jar`
 
 ```
-java -jar change-feed-processor-tests-1.0-SNAPSHOT-jar-with-dependencies.jar -serviceEndpoint "" -masterKey "" -feedContainerInitialThroughput 6000 -feedContainerId "" -leaseContainerId "" -shouldFeedContainerSplit "true" -shouldResetLeaseContainer "true" -docCountToIngestBeforeSplit 10000 -docCountToIngestAfterSplit 5000 -feedContainerNewProvisionedThroughput 11000 -bulkIngestionMicroBatchSize 50 -ingestionType "Bulk"
+java -jar change-feed-processor-tests-1.0-SNAPSHOT-jar-with-dependencies.jar -serviceEndpoint "" -masterKey "" -feedContainerInitialThroughput 6000 -feedContainerId "feed-container" -leaseContainerId "lease-container" -shouldFeedContainerSplit "true" -shouldResetLeaseContainer "true" -docCountToIngestBeforeSplit 10000 -docCountToIngestAfterSplit 5000 -feedContainerNewProvisionedThroughput 11000 -bulkIngestionMicroBatchSize 50 -ingestionType "Bulk" -changeFeedMaxItemCount 20 -shouldCleanUpContainers "false"
 ```
