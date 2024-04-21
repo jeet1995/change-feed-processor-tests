@@ -1,5 +1,9 @@
 
-1. Build `azure-cosmos`
+1. Prerequisited
+
+- JDK 17 and Maven installation.
+
+2Build `azure-cosmos`
 
 - Clone the `jeet1995:azure-sdk-for-java` repository and switch to the `CfpTesting` branch.
 - Build the `azure-cosmos` module with the following command if on Windows:
@@ -12,7 +16,7 @@ mvn --% -e -Ppackage-assembly -Dgpg.skip -DskipTests -Dmaven.javadoc.skip=true -
 mvn -e -Ppackage-assembly -Dgpg.skip -DskipTests -Dmaven.javadoc.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Drevapi.skip=true -pl com.azure:azure-cosmos clean package install
 ```
 
-2. Build `change-feed-processor-tests`
+3. Build `change-feed-processor-tests`
 
 - Clone the `jeet1995:change-feed-processor-tests` repository and switch to the `master` branch.
 - Build the `change-feed-processor-tests` module with the following command:
@@ -21,9 +25,9 @@ mvn -e -Ppackage-assembly -Dgpg.skip -DskipTests -Dmaven.javadoc.skip=true -Dspo
 mvn -e -Ppackage-assembly clean package
 ```
 
-3. Run the `jar` after building `change-feed-processor-tests`
+4. Run the `jar` after building `change-feed-processor-tests`
 
-3.1 Configurations possible
+-Possible Configurations
 
 | Configuration                           | Configuration Description                                                                                                          | Possible values         | Defaults                      |
 |-----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|-------------------------|-------------------------------|
@@ -45,6 +49,7 @@ mvn -e -Ppackage-assembly clean package
 
 3.2 Running the `jar`
 
+- Navigate to the location `~<path-till-downloaded-clone>/change-feed-processor-tests/target`
 ```
 java -jar change-feed-processor-tests-1.0-SNAPSHOT-jar-with-dependencies.jar -serviceEndpoint "" -masterKey "" -feedContainerInitialThroughput 6000 -feedContainerId "feed-container" -leaseContainerId "lease-container" -shouldFeedContainerSplit "true" -shouldResetLeaseContainer "true" -docCountToIngestBeforeSplit 10000 -docCountToIngestAfterSplit 5000 -feedContainerNewProvisionedThroughput 11000 -bulkIngestionMicroBatchSize 50 -ingestionType "Bulk" -changeFeedMaxItemCount 20 -shouldCleanUpContainers "false"
 ```
