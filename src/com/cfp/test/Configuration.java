@@ -10,63 +10,47 @@ import java.util.Locale;
 
 public class Configuration {
 
-    private static final int DEFAULT_FEED_CONTAINER_INITIAL_THROUGHPUT = 5000;
-    private static final String DEFAULT_DATABASE_ID = "ffcf-abhm-cfp-db";
-    private static final int DEFAULT_DOC_SIZE_IN_KB = 1;
-    private static final boolean DEFAULT_SHOULD_FEED_CONTAINER_SPLIT = false;
-    private static final int DEFAULT_FEED_CONTAINER_NEW_PROVISIONED_THROUGHPUT = 12_000;
-    private static final int DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE = 1;
-
-
-    @Parameter(names = "-serviceEndpoint", description = "Service Endpoint")
+    @Parameter(names = "-serviceEndpoint", description = "Service Endpoint", required = true)
     private String serviceEndpoint;
 
-    @Parameter(names = "-masterKey", description = "Master Key")
+    @Parameter(names = "-masterKey", description = "Master Key", required = true)
     private String masterKey;
 
     @Parameter(names = "-feedContainerInitialThroughput", description = "Initial provisioned throughput for feed container")
-    private int feedContainerInitialThroughput;
+    private int feedContainerInitialThroughput = 6000;
 
     @Parameter(names = "-databaseId", description = "Database id")
-    private String databaseId;
-
-    public String getFeedContainerId() {
-        return feedContainerId;
-    }
-
-    public String getLeaseContainerId() {
-        return leaseContainerId;
-    }
+    private String databaseId = "all-version-deletes-test-db";
 
     @Parameter(names = "-feedContainerId", description = "Feed container id")
-    private String feedContainerId;
+    private String feedContainerId = "feed-container";
 
     @Parameter(names = "-leaseContainerId", description = "Lease container id")
-    private String leaseContainerId;
+    private String leaseContainerId = "lease-container";
 
     @Parameter(names = "-shouldFeedContainerSplit", description = "Flag indicating whether feed container should split", arity = 1)
-    private boolean shouldFeedContainerSplit;
+    private boolean shouldFeedContainerSplit = false;
 
     @Parameter(names = "-shouldResetLeaseContainer", description = "Flag indicating whether lease container should be reset or not", arity = 1)
-    private boolean shouldResetLeaseContainer;
+    private boolean shouldResetLeaseContainer = false;
 
     @Parameter(names = "-docCountToIngestBeforeSplit", description = "Count of documents to ingest before the split")
-    private int docCountToIngestBeforeSplit;
+    private int docCountToIngestBeforeSplit = 6000;
 
     @Parameter(names = "-docCountToIngestAfterSplit", description = "Count of documents to ingest after the split")
-    private int docCountToIngestAfterSplit;
+    private int docCountToIngestAfterSplit = 6000;
 
     @Parameter(names = "-feedContainerNewProvisionedThroughput", description = "New provisioned throughput of feed container")
-    private int feedContainerNewProvisionedThroughput;
-
-    @Parameter(names = "-approximateDocSizeInBytes", description = "Approximate document size in bytes")
-    private int approximateDocSizeInKB;
+    private int feedContainerNewProvisionedThroughput = 11000;
 
     @Parameter(names = "-bulkIngestionMicroBatchSize", description = "Bulk ingestion micro-batch size")
-    private int bulkIngestionMicroBatchSize;
+    private int bulkIngestionMicroBatchSize = 50;
+
+    @Parameter(names = "-changeFeedMaxItemCount", description = "Max item per change feed batch.")
+    private int changeFeedMaxItemCount = 10;
 
     @Parameter(names = "-ingestionType", description = "Determines the way to ingest - either through bulk of point creates.", converter = IngestionTypeConverter.class)
-    private IngestionType ingestionType;
+    private IngestionType ingestionType = IngestionType.BULK;
 
     public String getServiceEndpoint() {
         return serviceEndpoint;
@@ -82,6 +66,15 @@ public class Configuration {
 
     public String getDatabaseId() {
         return databaseId;
+    }
+
+
+    public String getFeedContainerId() {
+        return feedContainerId;
+    }
+
+    public String getLeaseContainerId() {
+        return leaseContainerId;
     }
 
     public boolean shouldFeedContainerSplit() {
@@ -112,6 +105,10 @@ public class Configuration {
         return ingestionType;
     }
 
+    public int getChangeFeedMaxItemCount() {
+        return changeFeedMaxItemCount;
+    }
+
     static class IngestionTypeConverter implements IStringConverter<IngestionType> {
 
         @Override
@@ -136,13 +133,5 @@ public class Configuration {
     public void populateWithDefaults() {
         this.serviceEndpoint = StringUtils.defaultString(this.serviceEndpoint, TestConfigurations.HOST);
         this.masterKey = StringUtils.defaultString(this.masterKey, TestConfigurations.MASTER_KEY);
-        this.feedContainerInitialThroughput = DEFAULT_FEED_CONTAINER_INITIAL_THROUGHPUT;
-        this.feedContainerId = StringUtils.defaultString(this.feedContainerId, "");
-        this.leaseContainerId = StringUtils.defaultString(this.leaseContainerId, "");
-        this.databaseId = StringUtils.defaultString(this.databaseId, DEFAULT_DATABASE_ID);
-        this.shouldFeedContainerSplit = DEFAULT_SHOULD_FEED_CONTAINER_SPLIT;
-        this.feedContainerNewProvisionedThroughput = DEFAULT_FEED_CONTAINER_NEW_PROVISIONED_THROUGHPUT;
-        this.approximateDocSizeInKB = DEFAULT_DOC_SIZE_IN_KB;
-        this.bulkIngestionMicroBatchSize = DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE;
     }
 }
