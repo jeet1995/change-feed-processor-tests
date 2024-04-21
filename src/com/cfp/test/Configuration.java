@@ -52,6 +52,9 @@ public class Configuration {
     @Parameter(names = "-ingestionType", description = "Determines the way to ingest - either through bulk of point creates.", converter = IngestionTypeConverter.class)
     private IngestionType ingestionType = IngestionType.BULK;
 
+    @Parameter(names = "-shouldCleanUpContainers", description = "Flag to indicate whether feed and lease containers should be deleted after a run.", arity = 1)
+    private boolean shouldCleanUpContainers = false;
+
     public String getServiceEndpoint() {
         return serviceEndpoint;
     }
@@ -107,6 +110,10 @@ public class Configuration {
 
     public int getChangeFeedMaxItemCount() {
         return changeFeedMaxItemCount;
+    }
+
+    public boolean shouldCleanUpContainers() {
+        return shouldCleanUpContainers;
     }
 
     static class IngestionTypeConverter implements IStringConverter<IngestionType> {

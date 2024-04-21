@@ -83,6 +83,7 @@ public class ChangeFeedRunner {
                     owner,
                     feedContainer,
                     leaseContainer,
+                    cfg.getChangeFeedMaxItemCount(),
                     leaseManager,
                     leasePrefix,
                     changeFeedExecutionContextSupplier,
@@ -185,6 +186,7 @@ public class ChangeFeedRunner {
             String hostName,
             CosmosAsyncContainer feedContainer,
             CosmosAsyncContainer leaseContainer,
+            int changeFeedMaxItemCount,
             LeaseManager leaseManager,
             String leasePrefix,
             final Supplier<ChangeFeedExecutionContext> changeFeedExecutionContextSupplier,
@@ -234,7 +236,7 @@ public class ChangeFeedRunner {
             })
             .options(new ChangeFeedProcessorOptions()
                 .setStartFromBeginning(false)
-                .setMaxItemCount(50)
+                .setMaxItemCount(changeFeedMaxItemCount)
             )
             .buildChangeFeedProcessor();
     }
