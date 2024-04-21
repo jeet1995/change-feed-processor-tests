@@ -1,6 +1,7 @@
-package com.cfp.runners;
+package com.cfp.test;
 
 import com.beust.jcommander.JCommander;
+import com.cfp.test.runners.ChangeFeedRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,9 +24,9 @@ public class Main {
 
         JCommander jCommander = new JCommander(cfg, null, args);
 
-        ChangeFeedProcessManager changeFeedProcessManager = new ChangeFeedProcessManager();
+        ChangeFeedRunner changeFeedRunner = new ChangeFeedRunner();
 
-        Future<?> task = cfpExecutorService.submit(() -> changeFeedProcessManager.execute(cfg));
+        Future<?> task = cfpExecutorService.submit(() -> changeFeedRunner.execute(cfg));
 
         while (true) {
             if (task.isDone()) {

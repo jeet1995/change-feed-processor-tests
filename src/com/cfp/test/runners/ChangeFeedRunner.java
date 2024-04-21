@@ -1,4 +1,4 @@
-package com.cfp.runners;
+package com.cfp.test.runners;
 
 import com.azure.cosmos.ChangeFeedProcessor;
 import com.azure.cosmos.ChangeFeedProcessorBuilder;
@@ -9,13 +9,17 @@ import com.azure.cosmos.CosmosAsyncDatabase;
 import com.azure.cosmos.CosmosClientBuilder;
 import com.azure.cosmos.models.ChangeFeedProcessorItem;
 import com.azure.cosmos.models.ChangeFeedProcessorOptions;
-import com.azure.cosmos.models.CosmosChangeFeedRequestOptions;
 import com.azure.cosmos.models.CosmosContainerProperties;
 import com.azure.cosmos.models.FeedResponse;
-import com.azure.cosmos.models.ModelBridgeInternal;
 import com.azure.cosmos.models.ThroughputProperties;
-import com.cfp.runners.entity.RequestResponseEntity;
-import com.cfp.runners.entity.TonedDownFeedResponse;
+import com.cfp.test.ingestors.BulkIngestor;
+import com.cfp.test.ChangeFeedExecutionContext;
+import com.cfp.test.Configuration;
+import com.cfp.test.FileUtils;
+import com.cfp.test.ingestors.IngestionType;
+import com.cfp.test.ingestors.PointCreateIngestor;
+import com.cfp.test.entity.RequestResponseEntity;
+import com.cfp.test.entity.TonedDownFeedResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -34,21 +38,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-public class ChangeFeedProcessManager {
+public class ChangeFeedRunner {
 
-    private static final Logger logger = LoggerFactory.getLogger(ChangeFeedProcessManager.class);
+    private static final Logger logger = LoggerFactory.getLogger(ChangeFeedRunner.class);
 
-    private static final ExecutorService bulkIngestionExecutorService = new ScheduledThreadPoolExecutor(1);
+    private static final ExecutorService ingestionExecutorService = new ScheduledThreadPoolExecutor(1);
 
     public void execute(Configuration cfg) {
 
         int docCountToRead = cfg.getDocCountToIngestBeforeSplit() + cfg.getDocCountToIngestAfterSplit();
         String runId = UUID.randomUUID().toString();
 
-        AtomicReference<Instant> cfpStartTime = new AtomicReference<>();
-        AtomicReference<Instant> cfpEndTime = new AtomicReference<>();
-
-        // todo (abhmohanty): replace with value holder
         AtomicReference<String> databaseResourceId = new AtomicReference<>();
         AtomicReference<String> feedCollectionResourceId = new AtomicReference<>();
         AtomicReference<String> leaseCollectionResourceId = new AtomicReference<>();
@@ -64,7 +64,7 @@ public class ChangeFeedProcessManager {
 
         CosmosAsyncDatabase ffcfDatabase = null;
         CosmosAsyncContainer feedContainer = null, leaseContainer = null;
-        final AtomicReference<BatchRunner> bulkIngestionAndSplitRunner = new AtomicReference<>();
+        final AtomicReference<IngestionAndSplitRunner> ingestionAndSplitRunnerRef = new AtomicReference<>();
 
         try (CosmosAsyncClient asyncClient = buildCosmosAsyncClient(cfg)) {
 
@@ -75,12 +75,7 @@ public class ChangeFeedProcessManager {
             feedContainer = createContainerIfNotExists(ffcfDatabase, feedCollectionResourceId, feedContainerId, cfg.getFeedContainerInitialThroughput(), "/mypk");
             leaseContainer = createContainerIfNotExists(ffcfDatabase, leaseCollectionResourceId, leaseContainerId, 400, "/id");
 
-            final LeaseManager leaseManager = new LeaseManager(
-                leaseContainer,
-                leasePrefix,
-                cfg.getServiceEndpoint(),
-                feedCollectionResourceId.get(),
-                databaseResourceId.get());
+            final LeaseManager leaseManager = new LeaseManager(leaseContainer);
 
             final Supplier<ChangeFeedExecutionContext> changeFeedExecutionContextSupplier = () -> changeFeedExecutionContextRef.get();
 
@@ -90,20 +85,22 @@ public class ChangeFeedProcessManager {
                     leaseContainer,
                     leaseManager,
                     leasePrefix,
-                    cfpStartTime,
-                    cfpEndTime,
                     changeFeedExecutionContextSupplier,
                     isInitialProcessingComplete);
 
 
-            bulkIngestionAndSplitRunner.set(new BatchRunner());
+            if (cfg.getIngestionType() == IngestionType.BULK) {
+                ingestionAndSplitRunnerRef.set(new IngestionAndSplitRunner(new BulkIngestor(cfg)));
+            } else {
+                ingestionAndSplitRunnerRef.set(new IngestionAndSplitRunner(new PointCreateIngestor()));
+            }
 
             Mono
                 .just(changeFeedProcessor)
                 .flatMap(ChangeFeedProcessor::start)
                 .doOnSuccess(unused -> {
-                        bulkIngestionExecutorService.submit(
-                            () -> bulkIngestionAndSplitRunner.get().execute(cfg, feedContainerId));
+                        ingestionExecutorService.submit(
+                            () -> ingestionAndSplitRunnerRef.get().execute(cfg, feedContainerId));
                         leaseManager.takeLeaseSnapshot(String.format("/dbs/%s/colls/%s", databaseId, feedContainerId));
                     }
                 )
@@ -152,7 +149,7 @@ public class ChangeFeedProcessManager {
                     Mono.just(changeFeedProcessor).flatMap(ChangeFeedProcessor::stop).block();
                 }
 
-                bulkIngestionExecutorService.shutdown();
+                ingestionExecutorService.shutdown();
             }
 
             Thread.sleep(30_000);
@@ -170,14 +167,6 @@ public class ChangeFeedProcessManager {
                 logger.info("Deleting lease container.");
                 leaseContainer.delete().block();
             }
-
-            printDurations(
-                bulkIngestionAndSplitRunner.get().getSplitStartTime().get(),
-                bulkIngestionAndSplitRunner.get().getSplitEndTime().get(),
-                bulkIngestionAndSplitRunner.get().getIngestionStartTime().get(),
-                bulkIngestionAndSplitRunner.get().getIngestionEndTime().get(),
-                cfpStartTime.get(),
-                cfpEndTime.get());
         }
     }
 
@@ -198,8 +187,6 @@ public class ChangeFeedProcessManager {
             CosmosAsyncContainer leaseContainer,
             LeaseManager leaseManager,
             String leasePrefix,
-            final AtomicReference<Instant> startTime,
-            final AtomicReference<Instant> endTime,
             final Supplier<ChangeFeedExecutionContext> changeFeedExecutionContextSupplier,
             final AtomicBoolean isChangeFeedProcessingComplete) {
 
@@ -217,10 +204,6 @@ public class ChangeFeedProcessManager {
                 }
 
                 Set<String> idsFetched = changeFeedExecutionContext.getIdsFetched();
-
-                if (idsFetched.isEmpty()) {
-                    startTime.set(Instant.now());
-                }
 
                 AtomicBoolean isLeaseSnapshotTaken = changeFeedExecutionContext.getIsLeaseSnapshotTaken();
                 AtomicBoolean isChangeFeedReprocessing = changeFeedExecutionContext.getIsChangeFeedReprocessing();
@@ -241,7 +224,6 @@ public class ChangeFeedProcessManager {
                 logger.info("Ids fetched : {}", idsFetched.size());
 
                 if (idsFetched.size() >= idCountsToFetch) {
-                    endTime.set(Instant.now());
                     isChangeFeedProcessingComplete.set(true);
                 }
 
@@ -251,7 +233,6 @@ public class ChangeFeedProcessManager {
                 addRequestResponseEntityToList(context, docIdsProcessedInChangeFeedBatch, changeFeedExecutionContext.getRequestResponseEntities(), isChangeFeedReprocessing);
             })
             .options(new ChangeFeedProcessorOptions()
-                // .setLeasePrefix(leasePrefix)
                 .setStartFromBeginning(false)
                 .setMaxItemCount(50)
             )
@@ -287,19 +268,6 @@ public class ChangeFeedProcessManager {
         return asyncDatabase.getContainer(containerId);
     }
 
-    private static void printDurations(
-        Instant splitStartTime,
-        Instant splitEndTime,
-        Instant ingestionStartTime,
-        Instant ingestionEndTime,
-        Instant cfpStartTime,
-        Instant cfpEndTime) {
-
-        logger.info("Split duration : {}", Duration.between(splitStartTime, splitEndTime).toMillis());
-        logger.info("Bulk ingestion duration : {}", Duration.between(ingestionStartTime, splitStartTime).plus(Duration.between(splitEndTime, ingestionEndTime)).toMillis());
-        logger.info("CFP ingestion duration : {}", Duration.between(cfpStartTime, cfpEndTime).minus(Duration.between(splitStartTime, splitEndTime)).toMillis());
-    }
-
     private static void isProcessingComplete() {}
 
     private static synchronized void addRequestResponseEntityToList(
@@ -323,13 +291,12 @@ public class ChangeFeedProcessManager {
         requestResponseEntity.setResponseHeaders(feedResponse.getResponseHeaders());
         requestResponseEntity.setContinuationStateFromRequest(readableContinuationFromRequest);
         requestResponseEntity.setContinuationStateFromResponse(new String(Base64.getUrlDecoder().decode(feedResponse.getContinuationToken())));
-        // requestResponseEntity.setDocIdsFromChangeFeedBatch(docIdsFromChangeFeedBatch);
         requestResponseEntity.setChangeFeedBeingReprocessed(isReprocessing.get());
 
         requestResponseEntities.add(requestResponseEntity);
     }
 
     public static boolean isJobHangDetected(Instant lastProcessedInstantByCfp) {
-        return Duration.between(lastProcessedInstantByCfp, Instant.now()).compareTo(Duration.ofSeconds(60)) > 0;
+        return Duration.between(lastProcessedInstantByCfp, Instant.now()).compareTo(Duration.ofSeconds(600)) > 0;
     }
 }

@@ -1,6 +1,5 @@
-package com.cfp.runners.entity;
+package com.cfp.test.entity;
 
-import java.util.HashMap;
 import java.util.Map;
 
 public class TonedDownFeedResponse {

@@ -1,4 +1,4 @@
-package com.cfp.runners;
+package com.cfp.test.runners;
 
 import com.azure.cosmos.CosmosAsyncContainer;
 import com.azure.cosmos.implementation.HttpConstants;
@@ -27,59 +27,10 @@ public class LeaseManager {
     private static final FeedRangeEpkImpl fullFeedRange = FeedRangeEpkImpl.forFullRange();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final AtomicReference<List<JsonNode>> lastLeasesSnapshot = new AtomicReference<>();
-    private final String fullRangeLeaseId;
     private final CosmosAsyncContainer leaseContainer;
 
-    public LeaseManager(CosmosAsyncContainer leaseContainer,
-                        String leasePrefix,
-                        String serviceEndpoint,
-                        String feedCollectionResourceId,
-                        String databaseResourceId) throws URISyntaxException {
+    public LeaseManager(CosmosAsyncContainer leaseContainer) {
         this.leaseContainer = leaseContainer;
-        this.fullRangeLeaseId = constructLeaseId(leasePrefix, serviceEndpoint, feedCollectionResourceId,
-            databaseResourceId, fullFeedRange.getRange().getMin(), fullFeedRange.getRange().getMax());
-    }
-
-    public synchronized void resetLeaseContainerToLastRecordedLeaseSnapshot() {
-
-        String leaseQuery = "select * from c where not contains(c.id, \"info\")";
-
-        List<JsonNode> leaseDocuments = leaseContainer
-            .queryItems(leaseQuery, JsonNode.class)
-            .collectList()
-            .block();
-
-        if (leaseDocuments == null || leaseDocuments.isEmpty()) {
-            logger.warn("No lease documents found");
-            return;
-        }
-
-        // delete leases in the lease container
-        for (JsonNode leaseDocument : leaseDocuments) {
-
-            String leaseId = leaseDocument.get("id").asText();
-
-            leaseContainer
-                .deleteItem(leaseId, new PartitionKey(leaseId))
-                .doOnSuccess(response -> logger.info("Lease with id : {} has been deleted successfully.", leaseId))
-                .block();
-        }
-
-        List<JsonNode> lastRecordedLeases = new ArrayList<>(lastLeasesSnapshot.get());
-
-        // restore leases from the snapshot
-        for (JsonNode lastRecordedLease : lastRecordedLeases) {
-            leaseContainer
-                .createItem(lastRecordedLease)
-                .doOnSuccess(response -> {
-                    if (response.getStatusCode() == HttpConstants.StatusCodes.CREATED) {
-                        logger.info(
-                            "Lease item with id : {} successfully created manually.",
-                            response.getItem().get("id").asText());
-                    }
-                })
-                .block();
-        }
     }
 
     public synchronized void resetLeaseContainerToFullRangeLease() throws JsonProcessingException {
@@ -182,27 +133,6 @@ public class LeaseManager {
             feedCollectionResourceId,
             feedRangeMin,
             feedRangeMax);
-    }
-
-    private static String modifyContinuationWithZeroLsn(String readableContinuation) throws JsonProcessingException {
-        JsonNode continuationAsObjectNode = OBJECT_MAPPER.readTree(readableContinuation);
-        JsonNode continuationInnerAsObjectNode = continuationAsObjectNode.get("Continuation");
-
-        if (continuationAsObjectNode.isEmpty()) {
-            logger.error("Modification of continuation not possible as continuation is null or empty.");
-            return StringUtils.EMPTY;
-        }
-
-        Iterator<JsonNode> continuationNodeElements = continuationInnerAsObjectNode.get("Continuation").elements();
-
-        if (continuationNodeElements.hasNext()) {
-            JsonNode continuationNodeElement = continuationNodeElements.next();
-            ((ObjectNode) continuationNodeElement).put("token", "\"0\"");
-            String result = continuationAsObjectNode.toString();
-            return result;
-        }
-
-        return StringUtils.EMPTY;
     }
 
     private static String decorateContinuationWithFeedCollectionRid(String feedCollectionRid, String changeFeedContinuation) {

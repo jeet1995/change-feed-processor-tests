@@ -1,9 +1,5 @@
-package com.cfp.runners.entity;
+package com.cfp.test.entity;
 
-import com.azure.cosmos.models.ChangeFeedProcessorItem;
-import com.azure.cosmos.models.FeedResponse;
-
-import java.util.List;
 import java.util.Map;
 
 public class RequestResponseEntity {

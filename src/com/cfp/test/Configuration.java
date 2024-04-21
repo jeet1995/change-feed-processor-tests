@@ -1,8 +1,12 @@
-package com.cfp.runners;
+package com.cfp.test;
 
 import com.azure.cosmos.implementation.TestConfigurations;
 import com.azure.cosmos.implementation.apachecommons.lang.StringUtils;
+import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.Parameter;
+import com.cfp.test.ingestors.IngestionType;
+
+import java.util.Locale;
 
 public class Configuration {
 
@@ -11,7 +15,7 @@ public class Configuration {
     private static final int DEFAULT_DOC_SIZE_IN_KB = 1;
     private static final boolean DEFAULT_SHOULD_FEED_CONTAINER_SPLIT = false;
     private static final int DEFAULT_FEED_CONTAINER_NEW_PROVISIONED_THROUGHPUT = 12_000;
-    private static final int DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE = 50;
+    private static final int DEFAULT_BULK_INGESTION_MICRO_BATCH_SIZE = 1;
 
 
     @Parameter(names = "-serviceEndpoint", description = "Service Endpoint")
@@ -61,6 +65,9 @@ public class Configuration {
     @Parameter(names = "-bulkIngestionMicroBatchSize", description = "Bulk ingestion micro-batch size")
     private int bulkIngestionMicroBatchSize;
 
+    @Parameter(names = "-ingestionType", description = "Determines the way to ingest - either through bulk of point creates.", converter = IngestionTypeConverter.class)
+    private IngestionType ingestionType;
+
     public String getServiceEndpoint() {
         return serviceEndpoint;
     }
@@ -99,6 +106,31 @@ public class Configuration {
 
     public int getBulkIngestionMicroBatchSize() {
         return bulkIngestionMicroBatchSize;
+    }
+
+    public IngestionType getIngestionType() {
+        return ingestionType;
+    }
+
+    static class IngestionTypeConverter implements IStringConverter<IngestionType> {
+
+        @Override
+        public IngestionType convert(String value) {
+
+            if (value == null || value.isEmpty()) {
+                return IngestionType.BULK;
+            }
+
+            String normalizedIngestionTypeConvertedAsString = value.toLowerCase(Locale.ROOT).trim();
+
+            if (normalizedIngestionTypeConvertedAsString.equals("bulk")) {
+                return IngestionType.BULK;
+            } else if (normalizedIngestionTypeConvertedAsString.equals("pointcreate")) {
+                return IngestionType.POINT_CREATE;
+            }
+
+            return IngestionType.BULK;
+        }
     }
 
     public void populateWithDefaults() {

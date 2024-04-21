@@ -1,6 +1,6 @@
-package com.cfp.runners;
+package com.cfp.test;
 
-import com.cfp.runners.entity.RequestResponseEntity;
+import com.cfp.test.entity.RequestResponseEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
