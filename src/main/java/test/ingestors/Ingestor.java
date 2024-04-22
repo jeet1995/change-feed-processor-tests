@@ -1,4 +1,4 @@
-package com.cfp.test.ingestors;
+package test.ingestors;
 
 import com.azure.cosmos.CosmosAsyncContainer;
 

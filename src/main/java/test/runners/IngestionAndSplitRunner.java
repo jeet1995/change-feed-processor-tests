@@ -1,12 +1,12 @@
-package com.cfp.test.runners;
+package test.runners;
 
 import com.azure.cosmos.CosmosAsyncClient;
 import com.azure.cosmos.CosmosAsyncContainer;
 import com.azure.cosmos.CosmosClientBuilder;
 import com.azure.cosmos.models.ThroughputProperties;
 import com.azure.cosmos.models.ThroughputResponse;
-import com.cfp.test.Configuration;
-import com.cfp.test.ingestors.Ingestor;
+import test.Configuration;
+import test.ingestors.Ingestor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

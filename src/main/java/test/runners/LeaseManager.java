@@ -1,8 +1,7 @@
-package com.cfp.test.runners;
+package test.runners;
 
 import com.azure.cosmos.CosmosAsyncContainer;
 import com.azure.cosmos.implementation.HttpConstants;
-import com.azure.cosmos.implementation.apachecommons.lang.StringUtils;
 import com.azure.cosmos.implementation.feedranges.FeedRangeEpkImpl;
 import com.azure.cosmos.models.PartitionKey;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -17,7 +16,6 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -26,7 +24,7 @@ public class LeaseManager {
     private static final Logger logger = LoggerFactory.getLogger(LeaseManager.class);
     private static final FeedRangeEpkImpl fullFeedRange = FeedRangeEpkImpl.forFullRange();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private final AtomicReference<List<JsonNode>> lastLeasesSnapshot = new AtomicReference<>();
+    private final AtomicReference<JsonNode> lastLeaseSnapshot = new AtomicReference<>();
     private final CosmosAsyncContainer leaseContainer;
 
     public LeaseManager(CosmosAsyncContainer leaseContainer) {
@@ -58,29 +56,18 @@ public class LeaseManager {
                 .block();
         }
 
-        List<JsonNode> lastRecordedLeases = new ArrayList<>(lastLeasesSnapshot.get());
+        JsonNode lastRecordedLease = lastLeaseSnapshot.get();
 
-        for (JsonNode lastRecordedLease : lastRecordedLeases) {
-
-//            String continuation = lastRecordedLease.get("ContinuationToken").asText();
-//            String readableContinuation = new String(Base64.getDecoder().decode(continuation), StandardCharsets.UTF_8);
-//            String continuationWithZeroLsn = modifyContinuationWithZeroLsn(readableContinuation);
-//            String encodedContinuationWithZeroLsn =
-//                Base64.getEncoder().encodeToString(continuationWithZeroLsn.getBytes(StandardCharsets.UTF_8));
-//
-//            ((ObjectNode) lastRecordedLease).put("ContinuationToken", encodedContinuationWithZeroLsn);
-
-            leaseContainer
+        leaseContainer
                 .createItem(lastRecordedLease)
                 .doOnSuccess(response -> {
                     if (response.getStatusCode() == HttpConstants.StatusCodes.CREATED) {
                         logger.info(
-                            "Lease item with id : {} successfully created manually.",
-                            response.getItem().get("id").asText());
+                                "Lease item with id : {} successfully created manually.",
+                                response.getItem().get("id").asText());
                     }
                 })
                 .block();
-        }
     }
 
     public synchronized boolean takeLeaseSnapshot(String feedContainerRid) {
@@ -96,11 +83,7 @@ public class LeaseManager {
             return false;
         }
 
-        if (leaseDocuments.size() > 1) {
-            logger.warn("Lease snapshot is only taken when feed container has a single physical partition...");
-            return false;
-        }
-
+        // take the first lease document in the list of lease documents
         JsonNode leaseDocument = leaseDocuments.get(0);
         String continuationWithZeroLsn = decorateContinuationWithFeedCollectionRid(feedContainerRid, loadTemplateContinuationForFullFeedRange());
         String encodedContinuationWithZeroLsn =
@@ -108,31 +91,8 @@ public class LeaseManager {
 
         ((ObjectNode) leaseDocument).put("ContinuationToken", encodedContinuationWithZeroLsn);
 
-//        if (continuation.equals("null")) {
-//            logger.warn("Snapshotting of lease didn't go through since its continuation is 'null'...");
-//            return false;
-//        }
-
-        this.lastLeasesSnapshot.set(leaseDocuments);
+        this.lastLeaseSnapshot.set(leaseDocument);
         return true;
-    }
-
-    private static String constructLeaseId(
-        String leasePrefix,
-        String serviceEndpoint,
-        String feedCollectionResourceId,
-        String databaseResourceId,
-        String feedRangeMin,
-        String feedRangeMax) throws URISyntaxException {
-
-        return String.format(
-            "%s%s_%s_%s..%s-%s",
-            leasePrefix,
-            new URI(serviceEndpoint).getHost(),
-            databaseResourceId,
-            feedCollectionResourceId,
-            feedRangeMin,
-            feedRangeMax);
     }
 
     private static String decorateContinuationWithFeedCollectionRid(String feedCollectionRid, String changeFeedContinuation) {

@@ -1,6 +1,6 @@
-package com.cfp.test;
+package test;
 
-import com.cfp.test.entity.RequestResponseEntity;
+import test.entity.RequestResponseEntity;
 
 import java.time.Instant;
 import java.util.ArrayList;

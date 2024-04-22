@@ -1,10 +1,10 @@
-package com.cfp.test;
+package test;
 
 import com.azure.cosmos.implementation.TestConfigurations;
 import com.azure.cosmos.implementation.apachecommons.lang.StringUtils;
 import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.Parameter;
-import com.cfp.test.ingestors.IngestionType;
+import test.ingestors.IngestionType;
 
 import java.util.Locale;
 
@@ -23,10 +23,10 @@ public class Configuration {
     private String databaseId = "all-version-deletes-test-db";
 
     @Parameter(names = "-feedContainerId", description = "Feed container id")
-    private String feedContainerId = "feed-container";
+    private String feedContainerId = StringUtils.EMPTY;
 
     @Parameter(names = "-leaseContainerId", description = "Lease container id")
-    private String leaseContainerId = "lease-container";
+    private String leaseContainerId = StringUtils.EMPTY;
 
     @Parameter(names = "-shouldFeedContainerSplit", description = "Flag indicating whether feed container should split", arity = 1)
     private boolean shouldFeedContainerSplit = false;

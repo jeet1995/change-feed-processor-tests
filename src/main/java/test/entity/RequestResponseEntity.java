@@ -1,4 +1,4 @@
-package com.cfp.test.entity;
+package test.entity;
 
 import java.util.Map;
 

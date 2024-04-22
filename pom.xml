@@ -86,7 +86,7 @@
                   </descriptorRefs>
                   <archive>
                     <manifest>
-                      <mainClass>com.cfp.test.Main</mainClass>
+                      <mainClass>test.Main</mainClass>
                     </manifest>
                   </archive>
                 </configuration>

@@ -1,4 +1,4 @@
-package com.cfp.test.ingestors;
+package test.ingestors;
 
 import com.azure.cosmos.CosmosAsyncContainer;
 import com.azure.cosmos.implementation.HttpConstants;
@@ -7,10 +7,8 @@ import com.azure.cosmos.models.CosmosBulkItemResponse;
 import com.azure.cosmos.models.CosmosBulkOperations;
 import com.azure.cosmos.models.CosmosItemOperation;
 import com.azure.cosmos.models.PartitionKey;
-import com.cfp.test.Configuration;
-import com.cfp.test.entity.InternalObject;
-import com.cfp.test.ingestors.Ingestor;
-import com.cfp.test.ingestors.PointCreateIngestor;
+import test.Configuration;
+import test.entity.InternalObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
@@ -63,7 +61,7 @@ public class BulkIngestor implements Ingestor {
                 return Mono.just(bulkOperationResponse);
             })
             .onErrorResume(throwable -> {
-                logger.warn("Throwable: {}", throwable.toString());
+                logger.warn("Throwable: ", throwable);
                 return Mono.empty();
             })
             .doOnComplete(() -> {

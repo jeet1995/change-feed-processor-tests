@@ -1,7 +1,7 @@
-package com.cfp.test;
+package test;
 
 import com.beust.jcommander.JCommander;
-import com.cfp.test.runners.ChangeFeedRunner;
+import test.runners.ChangeFeedRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

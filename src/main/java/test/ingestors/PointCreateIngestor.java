@@ -1,9 +1,9 @@
-package com.cfp.test.ingestors;
+package test.ingestors;
 
 import com.azure.cosmos.CosmosAsyncContainer;
 import com.azure.cosmos.models.CosmosItemRequestOptions;
 import com.azure.cosmos.models.PartitionKey;
-import com.cfp.test.entity.InternalObject;
+import test.entity.InternalObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
@@ -30,7 +30,7 @@ public class PointCreateIngestor implements Ingestor {
                                     new CosmosItemRequestOptions())
                             .doOnSuccess(response -> docCountSuccessfullyInserted.incrementAndGet())
                             .onErrorResume(throwable -> {
-                                logger.warn("Throwable: {}", throwable.toString());
+                                logger.warn("Throwable: ", throwable);
                                 return Mono.empty();
                             });
                 })

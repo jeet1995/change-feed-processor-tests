@@ -1,4 +1,4 @@
-package com.cfp.test.runners;
+package test.runners;
 
 import com.azure.cosmos.ChangeFeedProcessor;
 import com.azure.cosmos.ChangeFeedProcessorBuilder;
@@ -12,14 +12,14 @@ import com.azure.cosmos.models.ChangeFeedProcessorOptions;
 import com.azure.cosmos.models.CosmosContainerProperties;
 import com.azure.cosmos.models.FeedResponse;
 import com.azure.cosmos.models.ThroughputProperties;
-import com.cfp.test.ingestors.BulkIngestor;
-import com.cfp.test.ChangeFeedExecutionContext;
-import com.cfp.test.Configuration;
-import com.cfp.test.FileUtils;
-import com.cfp.test.ingestors.IngestionType;
-import com.cfp.test.ingestors.PointCreateIngestor;
-import com.cfp.test.entity.RequestResponseEntity;
-import com.cfp.test.entity.TonedDownFeedResponse;
+import test.ingestors.BulkIngestor;
+import test.ChangeFeedExecutionContext;
+import test.Configuration;
+import test.FileUtils;
+import test.ingestors.IngestionType;
+import test.ingestors.PointCreateIngestor;
+import test.entity.RequestResponseEntity;
+import test.entity.TonedDownFeedResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -156,7 +156,7 @@ public class ChangeFeedRunner {
             Thread.sleep(30_000);
 
         } catch (Exception ex) {
-            logger.error("Exception occurred : {}", ex.toString());
+            logger.error("Exception occurred :", ex);
         } finally {
 
             if (cfg.shouldCleanUpContainers()) {
