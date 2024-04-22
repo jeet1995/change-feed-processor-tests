@@ -6,7 +6,7 @@
 2. Build `azure-cosmos`
 
 - Clone the `jeet1995:azure-sdk-for-java` repository and switch to the `CfpTesting` branch.
-- Navigate to `~<path-to-azure-sdk-for-java>/sdk/cosmos`
+- Navigate to `azure-sdk-for-java/sdk/cosmos`
 - Build the `azure-cosmos` module with the following command if on Windows:
 
 ```
@@ -20,7 +20,7 @@ mvn -e -Ppackage-assembly -Dgpg.skip -DskipTests -Dmaven.javadoc.skip=true -Dspo
 3. Build `change-feed-processor-tests`
 
 - Clone the `jeet1995:change-feed-processor-tests` repository and switch to the `master` branch.
-- Navigate to `~<path-to-change-feed-processor-tests>/sdk/cosmos`
+- Navigate to `change-feed-processor-tests`
 - Build the `change-feed-processor-tests` module with the following command:
 
 ```
@@ -51,7 +51,7 @@ mvn -e -Ppackage-assembly clean package
 
 3.2 Running the `jar`
 
-- Navigate to the location `~<path-till-downloaded-clone>/change-feed-processor-tests/target`
+- Navigate to the location `change-feed-processor-tests/target`
 ```
-java -jar change-feed-processor-tests-1.0-SNAPSHOT-jar-with-dependencies.jar -serviceEndpoint "" -masterKey "" -feedContainerInitialThroughput 6000 -feedContainerId "feed-container" -leaseContainerId "lease-container" -shouldFeedContainerSplit "true" -shouldResetLeaseContainer "true" -docCountToIngestBeforeSplit 10000 -docCountToIngestAfterSplit 5000 -feedContainerNewProvisionedThroughput 11000 -bulkIngestionMicroBatchSize 50 -ingestionType "Bulk" -changeFeedMaxItemCount 20 -shouldCleanUpContainers "false"
+java -jar change-feed-processor-tests-1.0-SNAPSHOT-jar-with-dependencies.jar -serviceEndpoint "" -masterKey "" -feedContainerInitialThroughput 6000 -feedContainerId "" -leaseContainerId "" -shouldFeedContainerSplit "true" -shouldResetLeaseContainer "true" -docCountToIngestBeforeSplit 10000 -docCountToIngestAfterSplit 5000 -feedContainerNewProvisionedThroughput 11000 -bulkIngestionMicroBatchSize 50 -ingestionType "Bulk" -changeFeedMaxItemCount 20 -shouldCleanUpContainers "false"
 ```
