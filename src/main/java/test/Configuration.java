@@ -55,6 +55,9 @@ public class Configuration {
     @Parameter(names = "-shouldCleanUpContainers", description = "Flag to indicate whether feed and lease containers should be deleted after a run.", arity = 1)
     private boolean shouldCleanUpContainers = true;
 
+    @Parameter(names = "-shouldWriteRequestResponseTimeline", description = "A boolean flag which indicates whether the request and response timeline should be written to a file.", arity = 1)
+    private boolean shouldWriteRequestResponseTimeline = false;
+
     public String getServiceEndpoint() {
         return serviceEndpoint;
     }
@@ -114,6 +117,10 @@ public class Configuration {
 
     public boolean shouldCleanUpContainers() {
         return shouldCleanUpContainers;
+    }
+
+    public boolean shouldWriteRequestResponseTimeline() {
+        return shouldWriteRequestResponseTimeline;
     }
 
     static class IngestionTypeConverter implements IStringConverter<IngestionType> {

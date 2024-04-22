@@ -47,11 +47,12 @@ mvn -e -Ppackage-assembly clean package
 | `bulkIngestionMicroBatchSize`           | Bulk ingestion micro-batch size                                                                                                    | Any integer             | 50                                             |
 | `ingestionType`                         | Determines the way to ingest into the feed container - either through bulk of point creates.                                       | `Bulk` or `PointCreate` | `Bulk`                                         |
 | `changeFeedMaxItemCount`                | Determines the max item count per change feed enumeration - could go beyond the specified value depending on ingestion batch size. | Any integer.            | 10                                             |
+| `shouldWriteRequestResponseTimeline`    | Flag indicating whether the request and response timeline should be written to a file.                                             | `true` or `false`       | `false`                                        |
 | `shouldCleanUpContainers`               | Flag to indicate whether feed and lease containers should be deleted after the run.                                                | `true` or `false`       | `true`                                         |
 
 3.2 Running the `jar`
 
 - Navigate to the location `change-feed-processor-tests/target`
 ```
-java -jar change-feed-processor-tests-1.0-SNAPSHOT-jar-with-dependencies.jar -serviceEndpoint "" -masterKey "" -feedContainerInitialThroughput 6000 -feedContainerId "" -leaseContainerId "" -shouldFeedContainerSplit "true" -shouldResetLeaseContainer "true" -docCountToIngestBeforeSplit 10000 -docCountToIngestAfterSplit 5000 -feedContainerNewProvisionedThroughput 11000 -bulkIngestionMicroBatchSize 50 -ingestionType "Bulk" -changeFeedMaxItemCount 20 -shouldCleanUpContainers "false"
+java -jar change-feed-processor-tests-1.0-SNAPSHOT-jar-with-dependencies.jar -serviceEndpoint "" -masterKey "" -feedContainerInitialThroughput 6000 -feedContainerId "" -leaseContainerId "" -shouldFeedContainerSplit "true" -shouldResetLeaseContainer "true" -docCountToIngestBeforeSplit 10000 -docCountToIngestAfterSplit 5000 -feedContainerNewProvisionedThroughput 11000 -bulkIngestionMicroBatchSize 50 -ingestionType "Bulk" -changeFeedMaxItemCount 20 -shouldWriteRequestResponseTimeline "false" -shouldCleanUpContainers "false"
 ```

@@ -127,7 +127,11 @@ public class ChangeFeedRunner {
                 logger.info("Attempting to reset lease container...");
                 isInitialProcessingComplete.set(false);
                 leaseManager.resetLeaseContainerToFullRangeLease();
-                FileUtils.writeRequestResponseEntitiesToFile(changeFeedExecutionContextSupplier.get().getRequestResponseEntities(), runId + "_" + "req_res_timeline_before_lease_reset.json");
+
+                if (cfg.shouldWriteRequestResponseTimeline()) {
+                    FileUtils.writeRequestResponseEntitiesToFile(changeFeedExecutionContextSupplier.get().getRequestResponseEntities(), runId + "_" + "req_res_timeline_before_lease_reset.json");
+                }
+
                 changeFeedExecutionContextRef.set(new ChangeFeedExecutionContext(docCountToRead, true));
 
                 changeFeedProcessor
@@ -145,7 +149,11 @@ public class ChangeFeedRunner {
             }
 
             if (isInitialProcessingComplete.get() || isJobHangDetected(changeFeedExecutionContextSupplier.get().getLastProcessedCfpBatchInstant().get())) {
-                FileUtils.writeRequestResponseEntitiesToFile(changeFeedExecutionContextSupplier.get().getRequestResponseEntities(), runId + "_" + "req_res_timeline_after_lease_reset.json");
+
+                if (cfg.shouldWriteRequestResponseTimeline()) {
+                    FileUtils.writeRequestResponseEntitiesToFile(changeFeedExecutionContextSupplier.get().getRequestResponseEntities(), runId + "_" + "req_res_timeline_after_lease_reset.json");
+                }
+
                 if (changeFeedProcessor.isStarted()) {
                     Mono.just(changeFeedProcessor).flatMap(ChangeFeedProcessor::stop).block();
                 }
